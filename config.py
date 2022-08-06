@@ -6,9 +6,9 @@ from datetime import datetime as dt
 
 import indicators
 
-MAIN_DIR = '/home/d-pad/PycharmProjects/TradeBot/'
-VPVR_DATA = '/home/d-pad/PycharmProjects/TradeBot/VPVR_Data'
-CANDLE_FOLDER = '/home/d-pad/PycharmProjects/TradeBot/Candle_Data'
+MAIN_DIR = 'EDIT THIS TO THE MAIN DIRECTORY SUCH AS C:\TradeBot'
+VPVR_DATA = 'EDIT THIS TO BE THE SAME AS THE ABOVE DIRECTORY PLUS \VPVR SUCH AS C:\TradeBot\VPVR'
+CANDLE_FOLDER = 'EDIT THIS TO BE THE SAME AS THE MAIN_DIR PLUS Candle_Data SUCH AS C:\TradeBot\Candle_Data'
 
 
 def save_candle_data(ticker, data, extension='csv', exchange=None):
