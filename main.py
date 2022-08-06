@@ -2,9 +2,8 @@ import logging
 import indicators as ind
 from sys import argv
 
-PORTFOLIO = ['BTC', 'ETH', 'EGLD', 'SOL', 'LUNA']
+PORTFOLIO = ['BTC', 'ETH', 'EGLD', 'SOL', 'AVAX']
 TIME_FRAMES = ['3m', '5m', '15m', '1h', '4h', '1d', '1w']
-TIME = '4h'
 args = argv
 del args[0]
 
@@ -23,7 +22,7 @@ def main():
 
 def test():
     """For testing functions without needing to change the main program."""
-    ind.monitor(asset='EGLD', upper_limit=65.3, lower_limit=64.75)
+    # Write test functions here and change the last line of this page from main() to test()
 
 
 def get_watchlist_data(watchlist):
@@ -52,4 +51,4 @@ if __name__ == "__main__":
                 lower = args[3]
                 ind.monitor(asset=asset, upper_limit=upper, lower_limit=lower)
     else:
-        test()
+        main()
