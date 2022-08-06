@@ -25,8 +25,8 @@ from win10toast import ToastNotifier
 # https://www.geeksforgeeks.org/plot-live-graphs-using-python-dash-and-plotly/
 
 # Define global variables.
-PRICE_UP = "C:\\Users\\D-Pad\\Music\\alarms\\beep.mp3"
-PRICE_DOWN = "C:\\Users\\D-Pad\\Music\\alarms\\red_alert.wav"
+PRICE_UP = "EDIT THIS TO SOME SOUND BYTE DIRECTORY"
+PRICE_DOWN = "EDIT THIS TO SOME SOUND BYTE DIRECTORY"
 now = dt.utcnow()
 unix_time = calendar.timegm(now.utctimetuple())  # Current time in unix format.
 unix_dict_key = {'1s': 1, '1m': 60, '3m': 180, '5m': 300, '15m': 900,
