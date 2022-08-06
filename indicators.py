@@ -1,3 +1,5 @@
+import os
+
 import ccxt
 import logging
 from time import sleep
@@ -11,6 +13,10 @@ import pandas as pd
 from ta.trend import EMAIndicator, SMAIndicator
 from ta.momentum import rsi, stochrsi
 from ta.volatility import BollingerBands
+from playsound import playsound
+import config
+import tools
+from win10toast import ToastNotifier
 # import dash
 # from dash.dependencies import Output, Input
 # import dash_core_components as dcc
@@ -19,9 +25,8 @@ from ta.volatility import BollingerBands
 # https://www.geeksforgeeks.org/plot-live-graphs-using-python-dash-and-plotly/
 
 # Define global variables.
-import config
-import tools
-
+PRICE_UP = "C:\\Users\\D-Pad\\Music\\alarms\\beep.mp3"
+PRICE_DOWN = "C:\\Users\\D-Pad\\Music\\alarms\\red_alert.wav"
 now = dt.utcnow()
 unix_time = calendar.timegm(now.utctimetuple())  # Current time in unix format.
 unix_dict_key = {'1s': 1, '1m': 60, '3m': 180, '5m': 300, '15m': 900,
@@ -33,7 +38,7 @@ PREFERRED_EXCHANGES = ['Binance', 'FTX', 'OKX', 'KuCoin', 'Phemex']
 can_trade = []  # Stores name tags such as BTC/USDT-Binance-True
 lock = Lock()
 log_format_string = '%(asctime)s:%(levelname)s:%(message)s'
-logging.basicConfig(level=logging.INFO, filename='', filemode='w', format=log_format_string)
+logging.basicConfig(level=logging.INFO, filename='run.log', filemode='w', format=log_format_string)
 time_frame_preferences = {'HighTimeFrames': ['1w', '1d', '4h'], 'LowTimeFrames': ['1h', '15m', '5m', '3m', '1m']}
 
 
@@ -44,7 +49,7 @@ class Asset:
     def __init__(self, symbol, time_frames=None):
         logging.info("Instantiating {0} asset object".format(symbol))
         if time_frames is None:
-            time_frames = ['1m', '3m', '5m', '15m', '1h', '4h', '1d', '1w']
+            time_frames = ['3m', '5m', '15m', '1h', '4h', '1d', '1w']
         if isinstance(time_frames, list):
             self.time_frames = time_frames
         elif isinstance(time_frames, str):
@@ -53,7 +58,7 @@ class Asset:
         self.usdt = symbol + "/USDT"
         self.tradeable_exchanges = []
         self.tickers = get_ticker_combos(symbol)
-        self.chart = {}
+        self.charts = []
 
         # See which exchanges the asset can trade on, if it hasn't been checked already
         get_markets = True
@@ -96,8 +101,31 @@ class Asset:
 
         # Build charts
         for time in self.time_frames:
-            self.chart[time] = Chart(self.usdt, time, exchange=exchange)
-        self.last_traded = self.chart['1m'].candles[-1]['Close']
+            if time == '1m':
+                self.chart_1m = Chart(self.usdt, '1m', exchange=exchange)
+                self.charts.append(self.chart_1m)
+            if time == '3m':
+                self.chart_3m = Chart(self.usdt, '3m', exchange=exchange)
+                self.charts.append(self.chart_3m)
+            if time == '5m':
+                self.chart_5m = Chart(self.usdt, '5m', exchange=exchange)
+                self.charts.append(self.chart_5m)
+            if time == '15m':
+                self.chart_15m = Chart(self.usdt, '15m', exchange=exchange)
+                self.charts.append(self.chart_15m)
+            if time == '1h':
+                self.chart_1h = Chart(self.usdt, '1h', exchange=exchange)
+                self.charts.append(self.chart_1h)
+            if time == '4h':
+                self.chart_4h = Chart(self.usdt, '4h', exchange=exchange)
+                self.charts.append(self.chart_4h)
+            if time == '1d':
+                self.chart_1day = Chart(self.usdt, '1d', exchange=exchange)
+                self.charts.append(self.chart_1day)
+            if time == '1w':
+                self.chart_1week = Chart(self.usdt, '1w', exchange=exchange)
+                self.charts.append(self.chart_1week)
+        self.last_traded = self.charts[-1].candles[-1]['Close']
 
     # CLASS FUNCTIONS
     # Update price
@@ -129,7 +157,7 @@ class Asset:
         and added to the list of candles on the chart."""
         # Update current global unix time stamp
         update_time()
-        for time, chart in self.chart.items():
+        for chart in self.charts:
             # Get a slice of the 1 minute chart and build a new candle from the data.
             one_minute_keys = {'5m': -5, '15': -15, '1h': -60, '4h': -240, '1d': -1440}
             one_minute_chart_exists = False
@@ -152,7 +180,7 @@ class Asset:
                         candle = candles[0]
                         chart.update_obj_candle_list(candle)
                     if one_minute_chart_exists and chart.time_interval != '1m':
-                        candle_list = self.chart['1m'].candles[one_minute_keys[time]:]
+                        candle_list = self.chart_1m.candles[one_minute_keys[chart.time_interval]:]
                         _timestamp = candle_list[0]['Timestamp']
                         _open = candle_list[0]['Open']
                         _high = candle_list[0]['High']
@@ -178,38 +206,6 @@ class Asset:
 
             else:
                 raise Exception('Unsupported time frame')
-
-    def get_trades(self, limit=1000, since=None, until=None):
-        """Fetches order book trade history. Trades come up to 1000 at a time and get added to a list. If no start or
-        stop times are specified then the x most recent trades are returned with x being the limit= parameter."""
-        # Update current unix timestamp
-        if limit > 1000:
-            limit = 1000
-        if 'Binance' in self.tradeable_exchanges:
-            xchng = set_exchange('Binance')
-        else:
-            xchng = set_exchange(self.tradeable_exchanges[0])
-        trades = xchng.fetch_trades(self.symbol, limit=limit, since=since)
-        if since is not None:
-            update_time()
-            current_unix_time = unix_time * 1000
-            counter = 0
-            if until is None:
-                while trades[-1]['timestamp'] < current_unix_time:
-                    counter += 1
-                    logging.info('Getting trade chunk {0} since timestamp {1}'.format(counter, trades[-1]['timestamp']))
-                    new_trades = xchng.fetch_trades(self.symbol, limit=limit, since=trades[-1]['timestamp'])
-                    for i in new_trades:
-                        trades.append(i)
-            elif until is not None:
-                while trades[-1]['timestamp'] < until:
-                    counter += 1
-                    logging.info('Getting trade chunk {0} since timestamp {1}'.format(counter, trades[-1]['timestamp']))
-                    new_trades = xchng.fetch_trades(self.symbol, limit=limit, since=trades[-1]['timestamp'])
-                    for i in new_trades:
-                        trades.append(i)
-
-        return trades
 
 
 class Chart:
@@ -293,6 +289,35 @@ class Chart:
                 logging.warning('Data provided to update_candles function doesn\'t contain candle data.')
         else:
             logging.warning('Data provided to update_candles function doesn\'t match candle dictionary format.')
+
+    def get_trades(self, limit=1000, since=None, until=None):
+        """Fetches order book trade history. Trades come up to 1000 at a time and get added to a list. If no start or
+        stop times are specified then the x most recent trades are returned with x being the limit= parameter."""
+        # Update current unix timestamp
+        if limit > 1000:
+            limit = 1000
+        xchng = set_exchange(self.exchange)
+        trades = xchng.fetch_trades(self.symbol, limit=limit, since=since)
+        if since is not None:
+            update_time()
+            current_unix_time = unix_time * 1000
+            counter = 0
+            if until is None:
+                while trades[-1]['timestamp'] < current_unix_time:
+                    counter += 1
+                    logging.info('Getting trade chunk {0} since timestamp {1}'.format(counter, trades[-1]['timestamp']))
+                    new_trades = xchng.fetch_trades(self.symbol, limit=limit, since=trades[-1]['timestamp'])
+                    for i in new_trades:
+                        trades.append(i)
+            elif until is not None:
+                while trades[-1]['timestamp'] < until:
+                    counter += 1
+                    logging.info('Getting trade chunk {0} since timestamp {1}'.format(counter, trades[-1]['timestamp']))
+                    new_trades = xchng.fetch_trades(self.symbol, limit=limit, since=trades[-1]['timestamp'])
+                    for i in new_trades:
+                        trades.append(i)
+
+        return trades
 
     def save_candle_data(self, extension='txt'):
         """Stores candle data into a txt or csv file for later use."""
@@ -2626,3 +2651,58 @@ def log_string(string, level='info'):
         logging.info(string)
     elif level == 'warning':
         logging.warning(string)
+
+
+def monitor(asset='', upper_limit=None, lower_limit=None):
+    # Send desktop notifications and play alarm sounds.
+    toaster = ToastNotifier()
+    os.system("cls")
+
+    if asset == '':
+        ticker = input("Which asset do you want to monitor?")
+    else:
+        ticker = asset
+    if "/" not in ticker:
+        ticker = ticker + "/USDT"
+    if upper_limit is None:
+        upper_limit = float(input("What are the price limits for the alarm to sound?\nUpper Limit: "))
+    else:
+        upper_limit = float(upper_limit)
+    if lower_limit is None:
+        lower_limit = float(input("Lower Limit: "))
+    else:
+        lower_limit = float(lower_limit)
+
+    if upper_limit < lower_limit:
+        temp_u = lower_limit
+        temp_l = upper_limit
+        upper_limit = temp_u
+        lower_limit = temp_l
+        del temp_l
+        del temp_u
+
+    alarm_triggered = False
+    direction = str
+    print("\nPrice action being monitored... A notification sound will play when price level is triggered\n")
+    print('Ticker: {}\nUpper Limit: ${:.2f}\nLower Limit: ${:.2f}'.format(ticker, upper_limit, lower_limit))
+    while not alarm_triggered:
+        candle = get_candle_data(ticker, '1m', candle_limit=1)
+        price = candle['Close'][0]
+        if price >= upper_limit:
+            direction = 'up'
+            alarm_triggered = True
+        elif price <= lower_limit:
+            direction = 'down'
+            alarm_triggered = True
+        sleep(1.1)
+
+    if direction == 'up':
+        s_up1 = "{} Price Increase".format(asset)
+        s_up2 = "The price of {} has reached the upper limit of ${}".format(asset, upper_limit)
+        toaster.show_toast(s_up1, s_up2)
+        playsound(PRICE_UP)
+    elif direction == 'down':
+        s_down1 = "{} Price Decrease".format(asset)
+        s_down2 = "The price of {} has reached the lower limit of ${}".format
+        toaster.show_toast(s_down1, s_down2)
+        playsound(PRICE_DOWN)
